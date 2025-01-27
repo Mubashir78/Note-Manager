@@ -158,37 +158,34 @@ public:
     }
 };
 
-
 class Menu_Item {
 public:
     string text;
+    function<void()> method;
 
-    Menu_Item(const string& text) : text(text){}
+    Menu_Item(const string& text, const function<void()> method) : text(text), method(method){}
 };
 
 class Menu {
 public:
     vector<Menu_Item> items;
-    vector<function<void()>> methods;
+    string title, prompt = "Use arrow keys to navigate, Enter to select.";
 
-    Menu(const vector<string>& options, const vector<function<void()>>& methods) : methods(methods){
-        for (const auto& option : options)
-            items.push_back(Menu_Item(option));
-    }
+    Menu(const string& title) : title(title){}
+    Menu(const string& title, const string& prompt) : title(title), prompt(prompt){}
 
-    Menu(const vector<Menu_Item>& items, const vector<function<void()>>& methods) : items(items), methods(methods){}
-
+    void add_item(const string& text, function<void()> method){ items.emplace_back(text, method); }
     void draw(int selected){
         clear();
-        int height, width;
-        getmaxyx(stdscr, height, width);
 
-        int start_Y = (height - items.size() * 2) / 2, max_len = 0;
+        mvprintw(0, (COLS - title.length())/2, "%s", title.c_str());
+
+        int start_Y = (LINES - items.size() * 2) / 2, max_len = 0;
 
         for (const auto& item : items)
             max_len = max(max_len, (int) item.text.length() + 3);
 
-        int start_X = (width - max_len) / 2;
+        int start_X = (COLS - max_len) / 2;
 
         for (int i=0; i<items.size(); i++){
             if (i == selected) attron(A_REVERSE);
@@ -198,12 +195,11 @@ public:
             if (i == selected) attroff(A_REVERSE);
         }
 
+        mvprintw(LINES-1, (COLS - prompt.length())/2, "%s", prompt.c_str());
         refresh();
     }
 
-    void run_method(){
-
-    }
+    void execute(int selected){ items[selected].method(); }
 };
 
 class Menu_Manager {
@@ -211,11 +207,11 @@ public:
     Menu menu; int selected; bool is_running = true;
     Note_Manager& manager;
 
-    Menu_Manager(const Menu& menu) : menu(menu), selected(0){}
+    Menu_Manager(const Menu& menu, Note_Manager& manager) : menu(menu), manager(manager), selected(0){}
 
-    int run(){
+    void run(){
         init_ncurses();
-        game_loop();
+        program_loop();
         close_ncurses();
     }
 
@@ -223,7 +219,7 @@ public:
         initscr(); noecho(); cbreak(); keypad(stdscr, TRUE); curs_set(0);
     }
 
-    void game_loop(){
+    void program_loop(){
         while (is_running){
             draw_menu();
             refresh();
@@ -248,12 +244,10 @@ public:
             } break;
 
             case '\n': {
-                if (selected == menu.items.size() - 1){
-                    is_running = false; break;
-                }
+                menu.items[selected].method();
+            } break;
 
-                menu.run_method(selected);
-            }
+            case 'q': return;
         }
     }
 
@@ -272,22 +266,7 @@ public:
 
 
 int main(int argc, char** argv){
-    vector<string> options = {"Select a course", "Add a course", "Delete a course", "Exit"};
-    Menu menu(options); Menu_Manager menu_manager(menu); Note_Manager note_manager;
-    
-    do {
-        system("clear");
-        
-        cout << "\nYour choice: (1-4): ";
-        cin >> usr_input;
-        
-        switch (usr_input){
-            case 1: {
-                //note_manager.list_course();
-            } break;
-        }
-
-    } while (usr_input != 4);
-
+    Note_Manager note_manager;
+    Menu()
     return 0;
 }
