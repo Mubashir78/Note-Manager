@@ -188,7 +188,7 @@ private:
         wrefresh(content_win);
     }
 
-    void draw_list(const string& title, bool show_controls) {
+    void draw_list(const string& title, const string& controls) {
         if (!content_win) content_win = create_window(LINES-4, COLS-4, 2, 2);
         werase(content_win);
         
@@ -199,11 +199,7 @@ private:
         
         if(current_items.empty()) {
             wattron(content_win, COLOR_PAIR(COLOR_STATUS));
-            if (show_controls) {
-                mvwprintw(content_win, 3, 2, "No items found. Press N to create new.");
-            } else {
-                mvwprintw(content_win, 3, 2, "No items found.");
-            }
+            mvwprintw(content_win, 3, 2, "No items found.");
             wattroff(content_win, COLOR_PAIR(COLOR_STATUS));
         }
         else {
@@ -215,13 +211,7 @@ private:
         }
         
         wattron(content_win, COLOR_PAIR(COLOR_STATUS));
-        if (show_controls) {
-            mvwprintw(content_win, LINES-6, 2, 
-                     "R: Rename | D: Delete | N: New | Enter: Edit | Esc: Back");
-        } else {
-            mvwprintw(content_win, LINES-6, 2, 
-                     "Enter: Select | Esc: Back");
-        }
+        mvwprintw(content_win, LINES-6, 2, "%s", controls.c_str());
         wattroff(content_win, COLOR_PAIR(COLOR_STATUS));
         
         wrefresh(content_win);
@@ -309,7 +299,6 @@ private:
                     show_message("Note saved!");
                     break;
                 case KEY_RESIZE:
-                    // Handle resize during editing (not ideal but basic)
                     delwin(edit_win);
                     edit_win = nullptr;
                     editing = false;
@@ -387,12 +376,32 @@ public:
                 }
 
                 case State::SELECT_COURSE: {
-                    current_items = notes.get_courses(); // Reload courses each time
-                    draw_list("Select Course", false);
+                    current_items = notes.get_courses();
+                    draw_list("Select Course", "N: New Course | R: Rename | D: Delete | Enter: Select | Esc: Back");
                     ch = getch();
                     if (ch == KEY_UP) highlight = highlight ? highlight-1 : current_items.size()-1;
                     if (ch == KEY_DOWN) highlight = (highlight == current_items.size()-1) ? 0 : highlight+1;
-                    if (ch == 10) {
+                    if (ch == 'n' || ch == 'N') {
+                        string name = get_input("New course name: ");
+                        if (!name.empty()) {
+                            notes.create_course(name);
+                            current_items = notes.get_courses();
+                        }
+                    } else if (ch == 'r' || ch == 'R') {
+                        if (!current_items.empty()) {
+                            string new_name = get_input("New course name: ");
+                            if (!new_name.empty()) {
+                                notes.rename_course(current_items[highlight], new_name);
+                                current_items = notes.get_courses();
+                            }
+                        }
+                    } else if (ch == 'd' || ch == 'D') {
+                        if (!current_items.empty()) {
+                            notes.delete_course(current_items[highlight]);
+                            current_items = notes.get_courses();
+                            highlight = max(0, highlight-1);
+                        }
+                    } else if (ch == 10) {
                         if (!current_items.empty()) {
                             current_course = current_items[highlight];
                             notes.load_notes(current_course);
@@ -410,7 +419,7 @@ public:
                 }
 
                 case State::COURSE_MANAGEMENT: {
-                    draw_list("Managing: " + current_course, true);
+                    draw_list("Managing: " + current_course, "N: New Note | R: Rename Note | D: Delete Note | Enter: Edit | Esc: Back");
                     ch = getch();
                     if (ch == KEY_UP) highlight = highlight ? highlight-1 : current_items.size()-1;
                     if (ch == KEY_DOWN) highlight = (highlight == current_items.size()-1) ? 0 : highlight+1;
@@ -423,21 +432,19 @@ public:
                     }
                     else if (ch == 'r' || ch == 'R') {
                         if (!current_items.empty()) {
-                            string new_name = get_input("New course name: ");
+                            string old_note = current_items[highlight];
+                            string new_name = get_input("New note name (without .txt): ");
                             if (!new_name.empty()) {
-                                notes.rename_course(current_course, new_name);
-                                current_course = new_name;
+                                notes.rename_note(current_course, old_note, new_name);
                                 current_items = notes.get_note_names();
                             }
                         }
                     }
                     else if (ch == 'd' || ch == 'D') {
                         if (!current_items.empty()) {
-                            notes.delete_course(current_course);
-                            state_stack.pop_back();
-                            state_stack.pop_back();
-                            current_items = notes.get_courses();
-                            highlight = 0;
+                            notes.delete_note(current_course, current_items[highlight]);
+                            current_items = notes.get_note_names();
+                            highlight = max(0, highlight-1);
                         }
                     }
                     else if (ch == 10) {
