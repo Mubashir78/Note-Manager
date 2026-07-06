@@ -1,4 +1,2 @@
-
-core
-main
-main_ncurses
+*.o
+note_manager
